@@ -16,4 +16,5 @@ Edit config.py to select the dataset, task type, split type, and hyperparameters
 
 ## Training
 
+```bash
 python training.py
