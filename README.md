@@ -7,8 +7,7 @@ MoleculeNet datasets:
 - Binary classification: BBBP, BACE, HIV
 - Multi-task classification: Tox21, SIDER, ClinTox
 - Regression: ESOL, FreeSolv, Lipophilicity
-  
-For access to the curated MoleculeNet datasets used in this work, please contact Dr. Binh P. Nguyen at: binh.nguyen@vuw.ac.nz
+
 
 ## Configuration
 
