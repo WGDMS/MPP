@@ -13,3 +13,7 @@ For access to the curated MoleculeNet datasets used in this work, please contact
 ## Configuration
 
 Edit config.py to select the dataset, task type, split type, and hyperparameters.
+
+## Training
+
+python training.py
