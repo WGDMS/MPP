@@ -1,0 +1,15 @@
+torch==2.7.1
+torch-scatter==2.1.2
+torch-sparse==0.6.18
+torch-cluster==1.6.3
+torch-spline-conv==1.2.2
+torch-geometric==2.6.1
+rdkit==2024.9.4
+mamba-ssm==2.3.0
+
+numpy==2.2.6
+pandas==2.3.1
+scikit-learn==1.7.1
+scipy==1.16.0
+einops==0.8.1
+tqdm==4.67.1
