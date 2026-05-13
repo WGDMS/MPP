@@ -9,3 +9,7 @@ MoleculeNet datasets:
 - Regression: ESOL, FreeSolv, Lipophilicity
   
 For access to the curated MoleculeNet datasets used in this work, please contact Dr. Binh P. Nguyen at: binh.nguyen@vuw.ac.nz
+
+## Configuration
+
+Edit config.py to select the dataset, task type, split type, and hyperparameters.
