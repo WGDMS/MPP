@@ -73,7 +73,7 @@ class RandomWalkerAtomEncoder(nn.Module):
         self.hidden_size = hidden_size
 
      
-        #  x is float features (101 dims), edge_attr is float (11 dims)
+        #  x is float features (101 dims), edge_attr is float (12 dims)
     
         self.feature_encoder = FeatureEncoder(
             hidden_size=hidden_size,
