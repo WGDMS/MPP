@@ -1,6 +1,6 @@
 # MolWalk-SSM
 
-**MolWalk-SSM: Chemistry-Aware Random-Walk State Space Modeling with Message Passing for Molecular Property Prediction
+**MolWalk-SSM: Chemistry-Aware Random-Walk State Space Modeling with Message Passing for Molecular Property Prediction**
 
 MolWalk-SSM is a molecular property prediction framework that combines chemistry-aware random-walk sequence modelling with local GINE message passing and global virtual-node propagation. The model operates directly on 2D molecular graphs and uses a bidirectional Mamba encoder to capture path-aware structural dependencies along sampled atom-bond walks.
 
