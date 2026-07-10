@@ -43,7 +43,7 @@ class RandomWalkerAtomEncoder(nn.Module):
     def __init__(
         self,
         in_node_dim=101,
-        in_edge_dim=11,
+        in_edge_dim=12,
         hidden_size=128,
         num_layers=3,
         walk_encoder="conv",          

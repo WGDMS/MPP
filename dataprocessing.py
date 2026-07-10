@@ -23,7 +23,7 @@ RDLogger.DisableLog("rdApp.error")   # optional
 
 # feature dim
 ATOM_DIM = 101
-BOND_DIM = 11
+BOND_DIM = 12
 
 
 ALLOWABLE_BOND_FEATURES = {
@@ -75,13 +75,21 @@ def get_atom_feature(atom):
     )
 
 
+#def get_bond_feature(bond):
+#    return np.array(
+ #       one_of_k_encoding(str(bond.GetBondType()), ALLOWABLE_BOND_FEATURES['bond_type']) +
+ #       [bond.GetIsConjugated()] +
+ #       one_of_k_encoding(str(bond.GetStereo()), ALLOWABLE_BOND_FEATURES['stereo'])
+ #   )
+
 def get_bond_feature(bond):
     return np.array(
         one_of_k_encoding(str(bond.GetBondType()), ALLOWABLE_BOND_FEATURES['bond_type']) +
         [bond.GetIsConjugated()] +
+        [bond.IsInRing()] +
         one_of_k_encoding(str(bond.GetStereo()), ALLOWABLE_BOND_FEATURES['stereo'])
     )
-
+    
 
 #generate molecular graph -atom level
 

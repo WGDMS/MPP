@@ -10,6 +10,7 @@ def get_random_walks(
     strict=False,
     window_size=0,
     rng=None,
+    edge_weights=None,          # NEW: aligned to csr_matrix.indices
 ):
     if rng is None:
         rng = np.random.RandomState(0)
@@ -19,8 +20,13 @@ def get_random_walks(
     indices = csr_matrix.indices
     indptr = csr_matrix.indptr
     num_nodes = csr_matrix.shape[0]
+    assert isinstance(num_nodes, (int, np.integer)), f"num_nodes is {type(num_nodes)}"
+
 
     degrees = np.asarray(csr_matrix.sum(axis=-1), dtype=np.int32).flatten()
+
+
+
 
     if sample_rate < 1.0:
         active_nodes = rng.rand(num_nodes) < sample_rate
@@ -67,16 +73,19 @@ def get_random_walks(
 
             edge_start = int(indptr[node_index])
             edge_end = int(indptr[node_index + 1])
-
+            
+                        # --- collect candidate neighbors (unchanged) ---
             neighbors = []
             edge_indices = []
+            cand_weights = []                       # NEW
 
             for edge_idx in range(edge_start, edge_end):
                 neighbor = int(indices[edge_idx])
-
                 if backtracking or neighbor != prev_index:
                     neighbors.append(neighbor)
                     edge_indices.append(edge_idx)
+                    if edge_weights is not None:    # NEW
+                        cand_weights.append(edge_weights[edge_idx])
 
             if len(neighbors) == 0:
                 if strict:
@@ -84,9 +93,21 @@ def get_random_walks(
                 next_index = prev_index
                 edge_index = pad_value
             else:
-                choice_index = rng.randint(len(neighbors))
+                if edge_weights is not None:        # NEW: weighted draw
+                    w = np.asarray(cand_weights, dtype=np.float64)
+                    w_sum = w.sum()
+                    if w_sum <= 0:
+                        choice_index = rng.randint(len(neighbors))
+                    else:
+                        choice_index = rng.choice(len(neighbors), p=w / w_sum)
+                else:                               # original uniform path
+                    choice_index = rng.randint(len(neighbors))
+
                 next_index = neighbors[choice_index]
                 edge_index = edge_indices[choice_index]
+
+
+          
 
             walk_node_index[walk_index, j + 1] = next_index
             walk_edge_index[walk_index, j] = edge_index

@@ -11,17 +11,20 @@ class GraphModel(nn.Module):
         output_dim=128,
         dropout=0.2,
         walk_encoder="mamba",
+        num_layers=3,
+        walk_length=50,
+        window_size=8,
     ):
         super().__init__()
 
         self.MolAtomEncoder = RandomWalkerAtomEncoder(
             in_node_dim=101,
-            in_edge_dim=11,
+            in_edge_dim=12,
             hidden_size=output_dim,
-            num_layers=3,
+            num_layers=num_layers,
             walk_encoder=walk_encoder,
-            walk_length=50,
-            window_size=8,
+            walk_length=walk_length,
+            window_size=window_size,
             dropout=dropout,
             global_pool="mean",
             global_mp_type="vn",

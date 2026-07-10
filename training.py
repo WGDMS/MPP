@@ -2,7 +2,7 @@ import os
 import random
 import itertools
 import copy
-
+import time
 import torch
 import torch.nn as nn
 import numpy as np
@@ -16,8 +16,10 @@ from utils import (
     train_func_binary, test_binary, get_perform_binary,
     train_func_multitask, test_multitask, get_perform_multitask,
     train_func_regre, test_regre, get_perform_regression,
-    random_split, random_scaffold_split, collate
+    random_split, random_scaffold_split, make_collate_fn
 )
+from torch_geometric.data import Batch
+from transforms import RandomWalkSampler
 
 
 class RMSELoss(nn.Module):
@@ -41,11 +43,17 @@ epochs_list = CONFIG["epochs_list"]
 patiences = CONFIG["patiences"]
 seeds = CONFIG["seeds"]
 
+walk_lengths = CONFIG.get("walk_lengths", [50])
+num_layers_list = CONFIG.get("num_layers_list", [3])
+window_size = CONFIG.get("window_size", 8)
+sample_rate = CONFIG.get("sample_rate", 1.0)
+
 walk_encoder = CONFIG["walk_encoder"]
 models_dir = CONFIG["models_dir"]
 results_dir = CONFIG["results_dir"]
 
 tasks = CONFIG.get("tasks", None)
+sampling_modes = CONFIG.get("sampling_modes", ["uniform"])
 
 os.makedirs(models_dir, exist_ok=True)
 os.makedirs(results_dir, exist_ok=True)
@@ -65,6 +73,39 @@ def set_seed(seed):
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
+
+def create_fixed_walk_dataset(
+    dataset_subset,
+    walk_seed,
+    walk_length,
+    sampling_mode,
+    ):
+    """
+    Generate and cache one deterministic walk set for each molecule.
+    """
+    fixed_rng = np.random.RandomState(walk_seed)
+
+    sampler = RandomWalkSampler(
+        length=walk_length,
+        sample_rate=sample_rate,
+        backtracking=False,
+        strict=False,
+        pad_idx=-1,
+        window_size=window_size,
+        sampling_mode=sampling_mode,
+        w_conj=CONFIG.get("w_conj", 0.5),
+        w_ring=CONFIG.get("w_ring", 0.3),
+        rng=fixed_rng,
+    )
+
+    fixed_dataset = []
+
+    for index in range(len(dataset_subset)):
+        graph = copy.deepcopy(dataset_subset[index])
+        graph_with_walks = sampler(graph)
+        fixed_dataset.append(graph_with_walks)
+
+    return fixed_dataset
 
 def get_split(data, smiles_list, seed):
     if split_type == "random":
@@ -129,27 +170,97 @@ def is_better(current, best, mode):
     raise ValueError(f"Unknown mode: {mode}")
 
 
-def run_one_config(batch_size, lr, max_epochs, patience, seed):
+#def run_one_config(batch_size, lr, max_epochs, patience, seed):
+def run_one_config(
+    batch_size,
+    lr,
+    max_epochs,
+    patience,
+    seed,
+    walk_length,
+    num_layers, sampling_mode="uniform"):
+
     set_seed(seed)
 
+    # Training walks remain stochastic and are regenerated for each batch.
+    train_collate_fn = make_collate_fn(
+        walk_length=walk_length,
+        sample_rate=sample_rate,
+        window_size=window_size,
+        sampling_mode=sampling_mode,
+        w_conj=CONFIG.get("w_conj", 0.5),
+        w_ring=CONFIG.get("w_ring", 0.3),
+    )
+
     data, smiles_list = create_dataset(dataset)
-    train_data, valid_data, test_data = get_split(data, smiles_list, seed)
+    train_data, valid_data, test_data = get_split(
+        data,
+        smiles_list,
+        seed,
+    )
+
+    # Fixed and separate walk seeds for validation and testing.
+    valid_walk_seed = 10_000 + seed
+    test_walk_seed = 20_000 + seed
+
+    fixed_valid_data = create_fixed_walk_dataset(
+        dataset_subset=valid_data,
+        walk_seed=valid_walk_seed,
+        walk_length=walk_length,
+        sampling_mode=sampling_mode,
+    )
+
+    fixed_test_data = create_fixed_walk_dataset(
+        dataset_subset=test_data,
+        walk_seed=test_walk_seed,
+        walk_length=walk_length,
+        sampling_mode=sampling_mode,
+    )
 
     train_loader = torch.utils.data.DataLoader(
-        train_data, batch_size=batch_size, shuffle=True, collate_fn=collate
-    )
-    valid_loader = torch.utils.data.DataLoader(
-        valid_data, batch_size=batch_size, shuffle=False, collate_fn=collate
-    )
-    test_loader = torch.utils.data.DataLoader(
-        test_data, batch_size=batch_size, shuffle=False, collate_fn=collate
+        train_data,
+        batch_size=batch_size,
+        shuffle=True,
+        collate_fn=train_collate_fn,
+        num_workers=0,
     )
 
+    valid_loader = torch.utils.data.DataLoader(
+        fixed_valid_data,
+        batch_size=batch_size,
+        shuffle=False,
+        collate_fn=Batch.from_data_list,
+        num_workers=0,
+    )
+
+    test_loader = torch.utils.data.DataLoader(
+        fixed_test_data,
+        batch_size=batch_size,
+        shuffle=False,
+        collate_fn=Batch.from_data_list,
+        num_workers=0,
+    )
     model = GraphModel(
-        n_output=n_output,
-        walk_encoder=walk_encoder
+    n_output=n_output,
+    walk_encoder=walk_encoder,
+    num_layers=num_layers,
+    walk_length=walk_length,
+    window_size=window_size,
     ).to(device)
 
+    trainable_params = sum(
+    parameter.numel()
+    for parameter in model.parameters()
+    if parameter.requires_grad
+    )
+
+    trainable_params_m = trainable_params / 1_000_000
+
+    print(
+    f"Trainable parameters: {trainable_params:,} "
+    f"({trainable_params_m:.3f} M)"
+    )
+    
     setup = get_task_setup()
     criterion = setup["criterion"]
     train_func = setup["train_func"]
@@ -174,14 +285,26 @@ def run_one_config(batch_size, lr, max_epochs, patience, seed):
     best_state = None
     best_test_metrics = None
     early_stop = 0
-
+    epoch_train_times = []
+    
     for epoch in range(max_epochs):
+        
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
 
+        epoch_start_time = time.perf_counter()
+    
         if task_type == "multitask":
             train_func(
                 epoch, model, optimizer, criterion, train_loader,
                 scheduler=None, tasks=tasks, device=device
             )
+            
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+
+            epoch_train_time = time.perf_counter() - epoch_start_time
+            
             val_out = test_func(
                 epoch, model, criterion, valid_loader,
                 tasks=tasks, device=device
@@ -194,6 +317,12 @@ def run_one_config(batch_size, lr, max_epochs, patience, seed):
                 epoch, model, optimizer, criterion, train_loader,
                 scheduler=None
             )
+            
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+
+            epoch_train_time = time.perf_counter() - epoch_start_time
+            
             val_out = test_func(epoch, model, criterion, valid_loader)
 
             if task_type == "regression":
@@ -203,58 +332,125 @@ def run_one_config(batch_size, lr, max_epochs, patience, seed):
                 val_metrics = get_perform(val_out[2], val_out[1])
                 current_metric = val_metrics[0]
 
+
+        if epoch > 0:
+            epoch_train_times.append(epoch_train_time)
+
+        print(
+            f"[seed={seed}] Epoch {epoch} "
+            f"training time: {epoch_train_time:.3f} s"
+        )
+    
         if is_better(current_metric, best_metric, mode):
             best_metric = current_metric
             best_state = copy.deepcopy(model.state_dict())
             early_stop = 0
 
-            if task_type == "multitask":
-                test_out = test_func(
-                    epoch, model, criterion, test_loader,
-                    tasks=tasks, device=device
-                )
-                best_test_metrics = get_perform(test_out[2], test_out[1], tasks)
-
-            else:
-                test_out = test_func(epoch, model, criterion, test_loader)
-                best_test_metrics = get_perform(test_out[2], test_out[1])
-
             if task_type == "regression":
                 print(
                     f"[seed={seed}] Epoch {epoch} "
-                    f"VAL_RMSE={best_metric:.4f} "
-                    f"TEST_RMSE={best_test_metrics[0]:.4f} "
-                    f"MAE={best_test_metrics[1]:.4f} "
-                    f"R2={best_test_metrics[2]:.4f}"
+                    f"BEST_VAL_RMSE={best_metric:.4f}"
                 )
             else:
                 print(
                     f"[seed={seed}] Epoch {epoch} "
-                    f"VAL_AUC={best_metric:.4f} "
-                    f"TEST_AUC={best_test_metrics[0]:.4f} "
-                    f"PR_AUC={best_test_metrics[1]:.4f}"
+                    f"BEST_VAL_AUC={best_metric:.4f}"
                 )
 
         else:
             early_stop += 1
+
             if early_stop >= patience:
                 print(f"Early stopping at epoch {epoch}")
                 break
 
         scheduler.step()
+    
+    if epoch_train_times:
+        avg_train_time_per_epoch = float(np.mean(epoch_train_times))
+        std_train_time_per_epoch = float(np.std(epoch_train_times, ddof=1))
+    else:
+        avg_train_time_per_epoch = float("nan")
+        std_train_time_per_epoch = float("nan")
 
-    if best_state is not None:
-        model.load_state_dict(best_state)
+    print(
+    f"[seed={seed}] Average training time per epoch: "
+    f"{avg_train_time_per_epoch:.3f} ± "
+    f"{std_train_time_per_epoch:.3f} s"
+)
+
+    if best_state is None:
+        raise RuntimeError(
+            f"No valid checkpoint was selected for seed {seed}."
+        )
+
+    # Load the checkpoint selected using validation performance.
+    model.load_state_dict(best_state)
+
+    # Evaluate the held-out test set exactly once.
+    if task_type == "multitask":
+        test_out = test_func(
+            epoch,
+            model,
+            criterion,
+            test_loader,
+            tasks=tasks,
+            device=device,
+        )
+        best_test_metrics = get_perform(
+            test_out[2],
+            test_out[1],
+            tasks,
+        )
+
+    else:
+        test_out = test_func(
+            epoch,
+            model,
+            criterion,
+            test_loader,
+        )
+        best_test_metrics = get_perform(
+            test_out[2],
+            test_out[1],
+        )
+
+    if task_type == "regression":
+        print(
+            f"[seed={seed}] "
+            f"BEST_VAL_RMSE={best_metric:.4f} "
+            f"FINAL_TEST_RMSE={best_test_metrics[0]:.4f} "
+            f"MAE={best_test_metrics[1]:.4f} "
+            f"R2={best_test_metrics[2]:.4f}"
+        )
+    else:
+        print(
+            f"[seed={seed}] "
+            f"BEST_VAL_AUC={best_metric:.4f} "
+            f"FINAL_TEST_AUC={best_test_metrics[0]:.4f} "
+            f"PR_AUC={best_test_metrics[1]:.4f}"
+        )
 
     base_result = {
-        "dataset": dataset,
-        "task_type": task_type,
-        "split_type": split_type,
-        "batch_size": batch_size,
-        "lr": lr,
-        "max_epochs": max_epochs,
-        "patience": patience,
-        "seed": seed,
+    "dataset": dataset,
+    "task_type": task_type,
+    "split_type": split_type,
+    "batch_size": batch_size,
+    "lr": lr,
+    "max_epochs": max_epochs,
+    "patience": patience,
+    "seed": seed,
+    "walk_length": walk_length,
+    "num_layers": num_layers,
+    "window_size": window_size,
+    "sample_rate": sample_rate,
+    "sampling_mode": sampling_mode, 
+    "valid_walk_seed": valid_walk_seed,
+    "test_walk_seed": test_walk_seed,    
+    "trainable_params": trainable_params,
+    "trainable_params_m": trainable_params_m,
+    "avg_train_time_per_epoch": avg_train_time_per_epoch,
+    "std_train_time_per_epoch": std_train_time_per_epoch,
     }
 
     if task_type == "regression":
@@ -283,7 +479,16 @@ def run_one_config(batch_size, lr, max_epochs, patience, seed):
 
 
 def summarize_results(df):
-    group_cols = ["batch_size", "lr", "max_epochs", "patience"]
+    group_cols = [
+    "sampling_mode",
+    "walk_length",
+    "num_layers",
+    "batch_size",
+    "lr",
+    "max_epochs",
+    "patience",
+    ]
+
 
     if task_type == "regression":
         summary = (
@@ -297,6 +502,9 @@ def summarize_results(df):
                   test_mae_std=("test_mae", "std"),
                   test_r2_mean=("test_r2", "mean"),
                   test_r2_std=("test_r2", "std"),
+                  trainable_params_m=("trainable_params_m", "first"),
+                  train_time_mean=("avg_train_time_per_epoch", "mean"),
+                  train_time_std=("avg_train_time_per_epoch", "std"),
               )
               .reset_index()
               .sort_values("test_rmse_mean", ascending=True)
@@ -338,20 +546,38 @@ def summarize_results(df):
 def main():
     all_results = []
 
-    for bs, lr, max_ep, pat in itertools.product(
-        batch_sizes, lrs, epochs_list, patiences
-    ):
+    for sampling_mode, walk_length, num_layers, bs, lr, max_ep, pat in itertools.product(
+        sampling_modes,
+        walk_lengths,
+        num_layers_list,
+        batch_sizes,
+        lrs,
+        epochs_list,
+        patiences):
         print("\n" + "=" * 80)
-        print(f"CONFIG: batch={bs} lr={lr} epochs={max_ep} patience={pat}")
+        print(
+            f"CONFIG: T={walk_length} L={num_layers} "
+            f"batch={bs} lr={lr} epochs={max_ep} patience={pat}"
+        )
         print("=" * 80)
 
         for seed in seeds:
-            result = run_one_config(bs, lr, max_ep, pat, seed)
+            result = run_one_config(
+                batch_size=bs,
+                lr=lr,
+                max_epochs=max_ep,
+                patience=pat,
+                seed=seed,
+                walk_length=walk_length,
+                num_layers=num_layers,
+                sampling_mode=sampling_mode, 
+            )
             all_results.append(result)
 
     df = pd.DataFrame(all_results)
 
-    file_prefix = f"{dataset}_{task_type}_{split_type}_{walk_encoder}"
+   # file_prefix = f"{dataset}_{task_type}_{split_type}_{walk_encoder}"
+    file_prefix = f"{dataset}_{task_type}_{split_type}_{walk_encoder}_walkL_layerAblation"
 
     raw_path = os.path.join(results_dir, f"grid_search_results_{file_prefix}.csv")
     summary_path = os.path.join(results_dir, f"grid_search_summary_{file_prefix}.csv")

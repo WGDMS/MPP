@@ -2,8 +2,6 @@ import os
 from torch_geometric.data import InMemoryDataset, DataLoader, Batch, Data
 from torch_geometric import data as DATA
 import torch
-#%matplotlib inline
-#import matplotlib.pyplot as plt
 import numpy as np
 import subprocess
 from math import sqrt
@@ -28,15 +26,19 @@ WALK_PAD_IDX = -1
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-walk_sampler = RandomWalkSampler(
-            length=50,
-            sample_rate=1.0,
-            backtracking=False,
-            strict=False,
-            pad_idx=WALK_PAD_IDX,
-            window_size=8,
-            )
 
+def make_collate_fn(walk_length=50, sample_rate=1.0, window_size=8,
+                    backtracking=False, strict=False, pad_idx=WALK_PAD_IDX,
+                    sampling_mode="uniform", w_conj=0.5, w_ring=0.0):  # NEW
+    walk_sampler = RandomWalkSampler(
+        length=walk_length, sample_rate=sample_rate,
+        backtracking=backtracking, strict=strict,
+        pad_idx=pad_idx, window_size=window_size,
+        sampling_mode=sampling_mode, w_conj=w_conj, w_ring=w_ring,  # NEW
+    )
+    def collate(data_list):
+        return Batch.from_data_list([walk_sampler(m) for m in data_list])
+    return collate
 
 class MolDataset(InMemoryDataset):
     def __init__(self, root='data', dataset='ESOL', y=None,
@@ -94,10 +96,10 @@ class MolDataset(InMemoryDataset):
             x = torch.tensor(atom_features, dtype=torch.float)
             if len(bond_list) == 0:
                 edge_index = torch.empty((2, 0), dtype=torch.long)
-                edge_attr = torch.empty((0, 11), dtype=torch.float)
+                edge_attr = torch.empty((0, 12), dtype=torch.float)
             else:
                 edge_index = torch.tensor(bond_list, dtype=torch.long).t().contiguous()
-                edge_attr = torch.tensor(bond_features, dtype=torch.float).view(-1, 11)
+                edge_attr = torch.tensor(bond_features, dtype=torch.float).view(-1, 12)
 
            # mol_data = Data(
             #    x=x,
@@ -131,10 +133,7 @@ def train_func_binary(epoch, model, optimizer, criterion, train_loader, schedule
                       device="cuda", min_batch_size=2, grad_clip=None):
     """
     Binary classification training loop.
-    Assumes:
-      - criterion is torch.nn.BCEWithLogitsLoss()
-      - model outputs logits with shape [B, 1] (or [B])
-      - data_mol.y is in {-1, 1} or {0, 1}
+    
     """
     model.train()
     start_time = time.time()
@@ -189,9 +188,7 @@ def train_func_binary(epoch, model, optimizer, criterion, train_loader, schedule
 def test_binary(epoch, model, criterion, test_loader, device="cuda"):
     """
     Binary classification eval loop.
-    Returns:
-      avg_loss, probs, labels
-    probs are sigmoid(logits) in [0,1]
+  
     """
     model.eval()
 
@@ -295,9 +292,7 @@ def train_func_multitask(epoch, model, optimizer, criterion, train_loader,
 
     for batch_idx, data in enumerate(train_loader):
         data_mol = data.to(device)
-      #  data_fun = data[1].to(device)
 
-        # IMPORTANT: reshape back to [B, T]
         labels = data_mol.y.float().to(device).view(-1, num_tasks)
 
         if labels.size(0) < min_batch_size:
@@ -305,7 +300,6 @@ def train_func_multitask(epoch, model, optimizer, criterion, train_loader,
 
         optimizer.zero_grad(set_to_none=True)
 
-       # outputs = model(data_mol, data_fun)
         outputs = model(data_mol)
         loss = get_loss_multitask(criterion, outputs, labels, device=device)
         loss.backward()
@@ -339,12 +333,9 @@ def test_multitask(epoch, model, criterion, test_loader, tasks=None, device="cud
     with torch.no_grad():
         for data in test_loader:
             data_mol = data.to(device)
-           # data_fun = data[1].to(device)
-
-            # IMPORTANT: reshape back to [B, T]
+          
             labels = data_mol.y.float().to(device).view(-1, num_tasks)
 
-            #outputs = model(data_mol, data_fun)
             outputs = model(data_mol)
             loss = get_loss_multitask(criterion, outputs, labels, device=device)
 
@@ -389,10 +380,8 @@ def random_split(dataset, random_seed=8, ratio_test=0.1, ration_valid=0.1):
 
 def generate_scaffold(smiles, include_chirality=False):
     """
-    Obtain Bemis-Murcko scaffold from smiles
-    :param smiles:
-    :param include_chirality:
-    :return: smiles of scaffold
+    Bemis-Murcko scaffold from smiles
+
     """
     scaffold = MurckoScaffold.MurckoScaffoldSmiles(
         smiles=smiles, includeChirality=include_chirality)
@@ -588,17 +577,3 @@ def get_prob_multitask(outputs, labels, device="cuda"):
 def rmse(predictions, targets):
     return np.sqrt(((predictions - targets) ** 2).mean())
    
-
-
-#def collate(data_list):
-  #  mol_list = [data[0] for data in data_list]
-   # mol_list_w = [walk_sampler(m) for m in mol_list]    
-   # batchA = Batch.from_data_list(mol_list_w)
-
-   # return batchA
-
-def collate(data_list):
-    mol_list_w = [walk_sampler(m) for m in data_list]
-    batchA = Batch.from_data_list(mol_list_w)
-    return batchA
-    

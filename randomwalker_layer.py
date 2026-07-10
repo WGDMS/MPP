@@ -7,6 +7,7 @@ from torch_scatter import scatter_sum, scatter_mean, scatter
 import torch.nn.functional as F
 import torch_geometric.nn as gnn
 from torch_geometric import utils
+from transformer import TransformerLayer
 
 class WalkEncoder(nn.Module):
     def __init__(
@@ -51,6 +52,7 @@ class WalkEncoder(nn.Module):
             self.norm = nn.LayerNorm(hidden_size, eps=1e-05)
         self.seq_layer_backward = None
         self.sequence_layer_type = sequence_layer_type
+        self.rnn_is_recurrent = False
         if sequence_layer_type == "conv":
             self.seq_layer = nn.Sequential(
                 Rearrange("a b c -> a c b"),
@@ -61,8 +63,49 @@ class WalkEncoder(nn.Module):
                 nn.ReLU(),
                 Rearrange("a b c -> a c b")
             )
+        elif sequence_layer_type == "rnn":
+            self.seq_layer = nn.RNN(
+                input_size=hidden_size,
+                hidden_size=hidden_size,
+                num_layers=1,
+                batch_first=True,
+                nonlinearity="tanh",
+                bidirectional=False,
+            )
+            self.rnn_is_recurrent = True
+
+            if bidirection:
+                self.seq_layer_backward = nn.RNN(
+                    input_size=hidden_size,
+                    hidden_size=hidden_size,
+                    num_layers=1,
+                    batch_first=True,
+                    nonlinearity="tanh",
+                    bidirectional=False,
+                )
+
+        elif sequence_layer_type == "lstm":
+            self.seq_layer = nn.LSTM(
+                input_size=hidden_size,
+                hidden_size=hidden_size,
+                num_layers=1,
+                batch_first=True,
+                bidirectional=False,
+            )
+            self.rnn_is_recurrent = True
+
+            if bidirection:
+                self.seq_layer_backward = nn.LSTM(
+                    input_size=hidden_size,
+                    hidden_size=hidden_size,
+                    num_layers=1,
+                    batch_first=True,
+                    bidirectional=False,
+                )
+                
+                
         elif sequence_layer_type == "s4":
-            from .s4 import S4Block
+            from s4 import S4Block
             self.seq_layer = S4Block(
                 d_model=hidden_size,
                 lr=0.001
@@ -89,6 +132,13 @@ class WalkEncoder(nn.Module):
                     expand=expand,
                     layer_idx=layer_idx,
                 )
+        elif sequence_layer_type == 'transformer':
+            self.seq_layer = TransformerLayer(
+                hidden_size=hidden_size,
+                num_heads=num_heads,
+                mlp_ratio=mlp_ratio,
+            )
+            
         else:
             raise NotImplementedError(
                 f"not supported sequence layer type: {sequence_layer_type}"
@@ -148,11 +198,19 @@ class WalkEncoder(nn.Module):
 
         if self.sequence_layer_type == 'transformer':
             walk_x_forward = self.seq_layer(walk_x, ~walk_node_mask)
+        elif self.sequence_layer_type in ['rnn', 'lstm']:
+            walk_x_forward, _ = self.seq_layer(walk_x)
         else:
             walk_x_forward = self.seq_layer(walk_x)
 
         if self.seq_layer_backward is not None:
-            walk_x_backward = self.seq_layer_backward(walk_x.flip([1])).flip([1])
+            if self.sequence_layer_type in ['rnn', 'lstm']:
+                walk_x_backward, _ = self.seq_layer_backward(walk_x.flip([1]))
+                walk_x_backward = walk_x_backward.flip([1])
+                
+            else:
+                walk_x_backward = self.seq_layer_backward(walk_x.flip([1])).flip([1])
+            
             walk_x_forward = (walk_x_forward + walk_x_backward) * 0.5
             del walk_x_backward
 
@@ -450,9 +508,7 @@ class GINConv(nn.Module):
         )
         self.model = gnn.GINEConv(mlp, train_eps=True, edge_dim=hidden_size)
 
-    #def forward(self, x, edge_index, edge_attr):
-     #   return x + self.model(x, edge_index, edge_attr), edge_attr
-        
+
         
     def forward(self, x, edge_index, edge_attr):
         if edge_attr is None:

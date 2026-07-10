@@ -35,14 +35,26 @@ CONFIG = {
     
     #"tasks" : ['CT_TOX', 'FDA_APPROVED'],   #ClinTox
     
-    "batch_sizes": [40, 50],
-    "lrs": [1e-4, 1e-3],
-    "epochs_list": [80, 100],
-    "patiences": [30, 50],
+
+  #  "sampling_modes": ["uniform", "chem"],   
+    "sampling_modes": ["chem"],  
+    "w_conj": 0.5,                            
+    "w_ring": 0.3,                           
+
+    "batch_sizes": [40],
+    "lrs": [1e-3],
+    "epochs_list": [100],
+    "patiences": [30],
+    
     "seeds": [0, 1, 2, 3, 4],
+   
+    "walk_lengths": [30],
+    "num_layers_list": [3],
+
+    "sample_rate": 1.0,
+    "window_size": 8,
 
     "walk_encoder": "mamba", 
-
     "models_dir": "models",
     "results_dir": "results",
 }
