@@ -14,7 +14,7 @@ Experiments are conducted on nine **MoleculeNet** benchmark datasets.
 
 ## Configuration
 
-Edit 'config.py' to specify the dataset, task type, split strategy, random seed, and hyperparameters. The dataset-specific hyperparameter settings are reported in Table S1 of the Supporting Document.
+Edit 'config.py' to specify the dataset, task type, split strategy, random seed, and hyperparameters. The dataset-specific hyperparameter settings are reported in Table S1 of the Supporting Document. Random or scaffold splits are generated automatically according to the 'split' setting in 'config.py'.
 
 ## Reproducing the experiments
 
