@@ -23,7 +23,7 @@ Edit 'config.py' to specify the dataset, task type, split strategy, random seed,
 3. Generate the random and scaffold splits using the provided splitting procedure.
 4. Train MolWalk-SSM using the dataset-specific settings reported in Table S1.
 5. During training, random walks are resampled for each batch.
-6. For validation and testing, one fixed walk set is generated for each molecule using the corresponding experimental seed and reused throughout evaluation.
+6. For validation and testing, one fixed walk set is generated for each molecule using the corresponding experimental seed (0--4) and reused throughout evaluation.
 7. Select checkpoints using validation ROC-AUC for classification and validation RMSE for regression.
 8. Evaluate the selected checkpoint once on the corresponding held-out test set.
    
