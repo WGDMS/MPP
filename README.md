@@ -59,7 +59,7 @@ Random and scaffold splits are generated automatically according to the `split_t
 
 ## Reproducing the Experiments
 
-For experimental seed \(s \in \{0,1,2,3,4\}\), the validation walk set uses seed \(10000+s\), and the test walk set uses seed \(20000+s\). Each fixed walk set is generated once and reused throughout evaluation for that run.
+For each experimental seed $s \in \{0,1,2,3,4\}$, the validation walk set uses seed $10000+s$, and the test walk set uses seed $20000+s$. Each fixed walk set is generated once and reused throughout evaluation for that run.
 
 ## Training
 
