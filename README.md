@@ -65,8 +65,6 @@ The reported experiments use five predefined experimental seeds:
 0, 1, 2, 3, 4
 ```
 
-For each experimental seed, the corresponding train, validation, and test partitions are generated using either random or scaffold splitting.
-
 ## Training
 
 After specifying the required dataset and experimental settings in `config.py`, run:
@@ -77,8 +75,4 @@ python training.py
 
 The script runs the configurations and seeds defined in `config.py` and stores the resulting outputs in the configured results directory.
 
-## Reproducibility
 
-The repository provides the source code, dataset-processing procedures, configuration settings, random seeds, fixed evaluation-walk procedure, and dependency information required to reproduce the MolWalk-SSM experiments.
-
-For the experiments reported in the paper, the five experimental seeds are `0`, `1`, `2`, `3`, and `4`. Training walks are sampled dynamically, whereas validation and test walks are fixed for each experimental run to ensure deterministic evaluation.
