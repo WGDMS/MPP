@@ -16,7 +16,6 @@ Even better, if you make the `requirements.txt` itself fully installable and tes
 
 ## Installation
 
-```bash
 conda create -n molwalk_mamba python=3.10
 conda activate molwalk_mamba
 pip install -r requirements.txt
