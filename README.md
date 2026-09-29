@@ -11,13 +11,13 @@ Experiments are conducted on nine **MoleculeNet** benchmark datasets.
 - Multi-task classification: Tox21, SIDER, ClinTox
 - Regression: ESOL, FreeSolv, Lipophilicity
 
-```markdown
-## Installation
 
+## Installation
+```markdown
 ```bash
 conda create -n molwalk_mamba python=3.10
 conda activate molwalk_mamba
-
+```markdown
 Even better, if you make the `requirements.txt` itself fully installable and test it successfully from a fresh environment, then you can simply write:
 
 pip install -r requirements.txt
