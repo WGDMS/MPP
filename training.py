@@ -592,9 +592,9 @@ def main():
     print(" -", summary_path)
 
     if task_type == "regression":
-    print("\nTop 5 configs by mean VALIDATION_RMSE:")
+        print("\nTop 5 configs by mean VALIDATION_RMSE:")
     else:
-    print("\nTop 5 configs by mean VALIDATION_ROC_AUC:")
+        print("\nTop 5 configs by mean VALIDATION_ROC_AUC:")
 
     print(summary.head(5).to_string(index=False))
 
