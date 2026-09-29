@@ -41,10 +41,10 @@ CONFIG = {
     "w_conj": 0.5,                            
     "w_ring": 0.3,                           
 
-    "batch_sizes": [40],
-    "lrs": [1e-3],
+    "batch_sizes": [40, 50],
+    "lrs": [1e-3, 1e-4],
     "epochs_list": [100],
-    "patiences": [30],
+    "patiences": [30, 40, 50],
     
     "seeds": [0, 1, 2, 3, 4],
    
