@@ -14,7 +14,6 @@ Experiments are conducted on nine **MoleculeNet** benchmark datasets.
 ```markdown
 ## Installation
 
-```markdown
 ```bash
 conda create -n molwalk_mamba python=3.10
 conda activate molwalk_mamba
