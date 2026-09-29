@@ -507,7 +507,7 @@ def summarize_results(df):
                   train_time_std=("avg_train_time_per_epoch", "std"),
               )
               .reset_index()
-              .sort_values("test_rmse_mean", ascending=True)
+              .sort_values("best_val_rmse_mean", ascending=True)
         )
     else:
         summary = (
@@ -529,7 +529,7 @@ def summarize_results(df):
                   test_f1_std=("test_f1", "std"),
               )
               .reset_index()
-              .sort_values("test_roc_mean", ascending=False)
+              .sort_values("best_val_roc_mean", ascending=False)
         )
 
         for col in ["best_val_roc", "test_roc"]:
@@ -592,9 +592,9 @@ def main():
     print(" -", summary_path)
 
     if task_type == "regression":
-        print("\nTop 5 configs by mean TEST_RMSE:")
+    print("\nTop 5 configs by mean VALIDATION_RMSE:")
     else:
-        print("\nTop 5 configs by mean TEST_ROC_AUC:")
+    print("\nTop 5 configs by mean VALIDATION_ROC_AUC:")
 
     print(summary.head(5).to_string(index=False))
 
