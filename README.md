@@ -14,7 +14,6 @@ Experiments are conducted on nine **MoleculeNet** benchmark datasets.
 
 Even better, if you make the `requirements.txt` itself fully installable and test it successfully from a fresh environment, then you can simply write:
 
-```markdown
 ## Installation
 
 ```bash
