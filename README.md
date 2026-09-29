@@ -12,17 +12,18 @@ Experiments are conducted on nine **MoleculeNet** benchmark datasets.
 - Regression: ESOL, FreeSolv, Lipophilicity
 
 
-Even better, if you make the `requirements.txt` itself fully installable and test it successfully from a fresh environment, then you can simply write:
-
 ## Installation
 
 conda create -n molwalk_mamba python=3.10
 conda activate molwalk_mamba
+
+Even better, if you make the `requirements.txt` itself fully installable and test it successfully from a fresh environment, then you can simply write:
+
 pip install -r requirements.txt
 
 ## Configuration
 
-Edit 'config.py' to specify the dataset, task type, split strategy, random seed, and hyperparameters. The dataset-specific hyperparameter settings are reported in Table S1 of the Supporting Document. Random or scaffold splits are generated automatically according to the 'split' setting in 'config.py'.
+Edit ```markdown 'config.py' to specify the dataset, task type, split strategy, random seed, and hyperparameters. The dataset-specific hyperparameter settings are reported in Table S1 of the Supporting Document. Random or scaffold splits are generated automatically according to the 'split' setting in 'config.py'.
 
 ## Reproducing the experiments
 
