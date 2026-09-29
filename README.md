@@ -67,26 +67,6 @@ The reported experiments use five predefined experimental seeds:
 
 For each experimental seed, the corresponding train, validation, and test partitions are generated using either random or scaffold splitting.
 
-During training, random walks are resampled for each batch.
-
-For validation and testing, deterministic fixed walk sets are generated and reused throughout evaluation. Separate walk seeds are used for validation and testing:
-
-```text
-Validation walk seed = 10000 + experimental seed
-Test walk seed       = 20000 + experimental seed
-```
-
-For example, for experimental seed `0`, the validation walk seed is `10000` and the test walk seed is `20000`.
-
-Checkpoint selection is based exclusively on validation performance:
-
-- ROC-AUC is maximised for classification tasks.
-- RMSE is minimised for regression tasks.
-
-For each run, the checkpoint with the best validation performance is selected and evaluated once on the corresponding held-out test set. Test performance is not used for checkpoint selection.
-
-The final reported results are calculated across the five predefined experimental runs.
-
 ## Training
 
 After specifying the required dataset and experimental settings in `config.py`, run:
@@ -102,19 +82,3 @@ The script runs the configurations and seeds defined in `config.py` and stores t
 The repository provides the source code, dataset-processing procedures, configuration settings, random seeds, fixed evaluation-walk procedure, and dependency information required to reproduce the MolWalk-SSM experiments.
 
 For the experiments reported in the paper, the five experimental seeds are `0`, `1`, `2`, `3`, and `4`. Training walks are sampled dynamically, whereas validation and test walks are fixed for each experimental run to ensure deterministic evaluation.
-
-## Citation
-
-If you use this code in your research, please cite the MolWalk-SSM paper:
-
-```text
-W. G. D. M. Samankula, J. Peng, and B. P. Nguyen,
-"MolWalk-SSM: Chemistry-Aware Random-Walk State Space Modelling
-with Message Passing for Molecular Property Prediction."
-```
-
-## Authors
-
-- W. G. D. M. Samankula
-- Jiajie Peng
-- Binh P. Nguyen
